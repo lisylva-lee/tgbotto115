@@ -21,6 +21,15 @@ import logging
 import asyncio
 from datetime import datetime
 
+# Telegram 代理支持（读取环境变量 HTTP_PROXY/HTTPS_PROXY，仅用于 Telegram Bot API）
+try:
+    import httpx
+    _TELEGRAM_PROXY = os.environ.get("HTTP_PROXY") or os.environ.get("HTTPS_PROXY") or ""
+    if _TELEGRAM_PROXY:
+        _TELEGRAM_PROXY = _TELEGRAM_PROXY.strip()
+except ImportError:
+    _TELEGRAM_PROXY = ""
+
 from telegram import Update, MessageEntity, BotCommand
 from telegram.ext import (
     Application,
@@ -1112,13 +1121,24 @@ async def post_init(application: Application) -> None:
     logger.info("已设置 Bot 菜单命令")
 
 
+def _build_application(token: str) -> Application:
+    """构建 Application。若设置了 HTTP_PROXY/HTTPS_PROXY 环境变量，则 Telegram Bot API
+    走该代理（仅影响 Telegram，不影响 115 API）。"""
+    builder = Application.builder().token(token).post_init(post_init)
+    if _TELEGRAM_PROXY:
+        logger.info(f"[proxy] Telegram Bot API 将通过代理连接: {_TELEGRAM_PROXY}")
+        client = httpx.AsyncClient(proxy=_TELEGRAM_PROXY, trust_env=False)
+        builder = builder.http_client(client)
+    return builder.build()
+
+
 def main() -> None:
     token = get_bot_token()
     if not token:
         logger.error("Bot Token 未设置")
         sys.exit(1)
 
-    application = Application.builder().token(token).post_init(post_init).build()
+    application = _build_application(token)
 
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("current_cid", current_cid))
