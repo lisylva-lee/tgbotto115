@@ -275,19 +275,26 @@ async def load_cookie_from_file() -> str:
 
 def extract_all_links_from_message(message) -> dict:
     """提取链接（支持转发消息）。返回 {'share': [...], 'offline': [...], 'pages': [...]}
-    pages 为 telegra.ph 等资源聚合页面 URL，需另行抓取解析。"""
+
+    pages 为 telegra.ph 等资源聚合页面 URL，需另行抓取解析。
+    页面链接采集规则：内联按钮中的页面链接是频道定义的正式入口（如"查看资源"），
+    若存在则优先只取按钮中的页面；按钮无页面链接时才回退到正文/实体里的链接，
+    避免把消息正文中散落的补充页面一并抓取（如蜘蛛侠2/蜘蛛侠3 独立页面）。
+    """
     result = {"share": [], "offline": [], "pages": []}
     text = message.text or message.caption or ""
     entities = message.entities or message.caption_entities or []
+
+    text_pages: list[str] = []
 
     def _add_share(sc, rc, original):
         if sc:
             result["share"].append({"share_code": sc, "receive_code": rc or "", "original_text": original})
 
-    def _add_page(url):
+    def _add_text_page(url):
         cleaned = normalize_page_url(url)
         if cleaned:
-            result["pages"].append(cleaned)
+            text_pages.append(cleaned)
 
     for ent in entities:
         try:
@@ -304,7 +311,7 @@ def extract_all_links_from_message(message) -> dict:
                 _add_share(m.group(1), m.group(2), url)
                 continue
             if RE_TELEGRAPH.match(url):
-                _add_page(url)
+                _add_text_page(url)
                 continue
             if RE_MAGNET.match(url) or RE_ED2K.match(url):
                 result["offline"].append(url)
@@ -316,14 +323,17 @@ def extract_all_links_from_message(message) -> dict:
     _btn_links = extract_links_from_reply_markup(getattr(message, "reply_markup", None))
     result["share"].extend(_btn_links["share"])
     result["offline"].extend(_btn_links["offline"])
-    for _u in _btn_links["pages"]:
-        _add_page(_u)
+    btn_pages: list[str] = _btn_links["pages"]
 
     for m in RE_115_URL.finditer(text):
         _add_share(m.group(1), m.group(2), m.group(0))
 
     for m in RE_TELEGRAPH_LOOSE.finditer(text):
-        _add_page(m.group(0))
+        _add_text_page(m.group(0))
+
+    # 页面链接取舍：按钮优先（"查看资源"式正式入口）；按钮无页面时才回退正文链接
+    page_sources = btn_pages if btn_pages else text_pages
+    result["pages"].extend(page_sources)
 
     result["offline"].extend(RE_MAGNET.findall(text))
     result["offline"].extend(RE_ED2K.findall(text))

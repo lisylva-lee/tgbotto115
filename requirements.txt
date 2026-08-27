@@ -3,6 +3,9 @@
 # [job-queue] 提供 ConversationHandler 的 conversation_timeout（依赖 APScheduler），缺失会导致会话超时无效
 python-telegram-bot[job-queue]>=20.0
 requests>=2.28.0
-p115client>=0.0.5
+# 锁定 p115client 版本！>=0.0.5 无上限让镜像装到 0.0.9.x，
+# 新版 check_for_relogin 初始化行为变化导致 "115 客户端未初始化"。
+# 0.0.6 与生产 sh 环境 venv 一致（已验证正常）。
+p115client==0.0.6
 cachetools>=5.0.0
 PyYAML>=6.0
