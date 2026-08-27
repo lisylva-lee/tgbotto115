@@ -71,9 +71,10 @@ class P115ClientWrapper:
                 logger.warning("p115client 未安装，无法创建客户端")
                 return None
             try:
-                self._client = await self.run_blocking_io(
-                    P115Client, cookie, check_for_relogin=True
-                )
+                # 注意：不要传 check_for_relogin —— PyPI 0.0.9.x 已移除该参数，
+                # 传了会 TypeError 导致初始化失败（镜像/新装环境必现）；
+                # 且该参数会触发自动 relogin 可能作废 config.yaml 里的 cookie。
+                self._client = await self.run_blocking_io(P115Client, cookie)
                 if self._client and getattr(self._client, 'user_id', None):
                     logger.info(f"115 客户端初始化成功，user_id={self._client.user_id}")
                 else:
