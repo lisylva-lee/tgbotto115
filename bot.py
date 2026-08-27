@@ -1123,12 +1123,14 @@ async def post_init(application: Application) -> None:
 
 def _build_application(token: str) -> Application:
     """构建 Application。若设置了 HTTP_PROXY/HTTPS_PROXY 环境变量，则 Telegram Bot API
-    走该代理（仅影响 Telegram，不影响 115 API）。"""
+    走该代理（仅影响 Telegram，不影响 115 API）。
+
+    使用 ApplicationBuilder.proxy()（PTB 20.7+ 通用接口），兼容不同 PTB 版本。
+    """
     builder = Application.builder().token(token).post_init(post_init)
     if _TELEGRAM_PROXY:
         logger.info(f"[proxy] Telegram Bot API 将通过代理连接: {_TELEGRAM_PROXY}")
-        client = httpx.AsyncClient(proxy=_TELEGRAM_PROXY, trust_env=False)
-        builder = builder.http_client(client)
+        builder = builder.proxy(_TELEGRAM_PROXY)
     return builder.build()
 
 
