@@ -17,7 +17,7 @@ p115:
   cookie: ""
 
 # 系统默认目录（可选，启动时自动写入 default_cids 表）
-# 留空则不设置；填写 CID 或路径名（如 "/云下载"），bot 启动时自动入库
+# 留空则不设置；填写 CID ，bot 启动时自动入库
 defaults:
   share_default_cid: ""       # 分享默认目录 CID（留空=不设置）
   offline_default_cid: ""     # 离线默认目录 CID（留空=不设置）
