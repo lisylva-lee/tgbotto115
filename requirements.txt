@@ -1,0 +1,8 @@
+# 115 ShareBot 依赖
+
+# [job-queue] 提供 ConversationHandler 的 conversation_timeout（依赖 APScheduler），缺失会导致会话超时无效
+python-telegram-bot[job-queue]>=20.0
+requests>=2.28.0
+p115client>=0.0.5
+cachetools>=5.0.0
+PyYAML>=6.0

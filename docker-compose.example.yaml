@@ -1,0 +1,19 @@
+# 115 ShareBot - Docker Compose 示例
+# 用法：
+#   1. 把本项目的 config.yaml（含真实 token/cookie）放到宿主机 ./config.yaml
+#   2. 单次运行:  cp config.example.yaml config.yaml 并填写
+#   3. 启动:      docker compose up -d
+# 注意：config.yaml 绝不提交到 git（已在 .gitignore），也不会进入镜像。
+services:
+  sharebot:
+    image: ghcr.io/lisylva-lee/tgbotto115:latest
+    container_name: sharebot
+    restart: unless-stopped
+    environment:
+      - TZ=Asia/Shanghai
+    volumes:
+      # 宿主机 config.yaml -> 容器内 /app/config.yaml（每次改配置后需重启容器生效）
+      - ./config.yaml:/app/config.yaml:ro
+      # 持久化数据（用户目录/数据库/日志）
+      - ./data:/app/data
+      - ./logs:/app/logs

@@ -1,0 +1,37 @@
+# =============================================================
+# 115 ShareBot 配置文件
+# 使用前：复制本文件为 config.yaml，并填写必填项。
+#   复制命令（Windows PowerShell）：
+#     Copy-Item config.example.yaml config.yaml
+#   然后编辑 config.yaml，填写 telegram.bot_token 与 p115.cookie。
+# =============================================================
+
+# Telegram 机器人配置（必填）
+telegram:
+  # @BotFather 创建机器人后获取的 token，形如 123456789:AAH...
+  bot_token: ""
+
+# 115 网盘配置（必填）
+p115:
+  # 登录 115 网页版后从浏览器 Cookie 中复制整段（含 UID=... 等）
+  cookie: ""
+
+# 系统默认目录（可选，启动时自动写入 default_cids 表）
+# 留空则不设置；填写 CID 或路径名（如 "/云下载"），bot 启动时自动入库
+defaults:
+  share_default_cid: ""       # 分享默认目录 CID（留空=不设置）
+  offline_default_cid: ""     # 离线默认目录 CID（留空=不设置）
+
+# 运行时调优（可选，均有默认值）
+runtime:
+  request_qps: 1.0             # 115 API 全局 QPS 限制（默认 1，防止高频触发风控导致 cookie 失效）
+  session_ttl: 3600            # 用户会话缓存秒数
+  session_maxsize: 100          # 会话缓存上限
+  cid_selection_timeout: 10     # 目录选择超时（秒）
+  message_buffer_timeout: 3.0   # 批量消息缓冲等待（秒）
+  max_concurrent_tasks: 3       # 并发上限（低内存机器请调小）
+  batch_size: 50                # 批量转存每批数量
+  max_recursion_depth: 15       # 目录递归最大深度
+  request_delay: 0.5            # 请求间隔（秒）
+  retry_delay: 3.0              # 重试等待（秒）
+  max_retries: 3                # 最大重试次数
