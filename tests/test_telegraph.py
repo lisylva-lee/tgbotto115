@@ -152,6 +152,30 @@ def test_fetch_links_from_page_dedup_on_duplicate(monkeypatch):
     assert len(result["offline"]) == 1
 
 
+def test_fetch_links_from_page_splits_adjacent_ed2k_and_dedup(monkeypatch):
+    """回归：页面作者重复粘贴同一 ed2k + 相邻两条 ed2k 无分隔（粘连）时，
+    数量不得虚增（实测蜘蛛侠系列页 9 个真实资源曾被识别成 10 条）。"""
+    html = """
+    <html><head><meta property="og:description" content="
+    ed2k://|file|Movie.A.mkv|100|AAAA11112222AAAA11112222AAAA1111|/ed2k://|file|Movie.B.mkv|200|BBBB11112222BBBB11112222BBBB1111|/
+    "></head>
+    <body><article>
+    <p>ed2k://|file|Movie.A.mkv|100|AAAA11112222AAAA11112222AAAA1111|/</p>
+    </article></body></html>
+    """
+
+    class FakeResp:
+        status_code = 200
+        text = html
+
+    monkeypatch.setattr("core.utils.requests.get", lambda *a, **k: FakeResp())
+    result = fetch_links_from_page("https://telegra.ph/adjacent-dup")
+    # 3 条匹配（粘连 2 条 + 正文重复 1 条）→ 去重后 2 个唯一资源
+    assert len(result["offline"]) == 2, f"期望 2 个唯一资源，实际 {result['offline']}"
+    names = sorted(u.split("|")[2] for u in result["offline"])
+    assert names == ["Movie.A.mkv", "Movie.B.mkv"], names
+
+
 def test_fetch_links_from_page_http_error_returns_empty(monkeypatch):
     class FakeResp:
         status_code = 404

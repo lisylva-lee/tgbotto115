@@ -31,8 +31,11 @@ RE_115_URL = re.compile(
 # 磁力链接
 RE_MAGNET = re.compile(r"magnet:\?xt=[^\s]+", re.IGNORECASE)
 
-# 电驴链接
-RE_ED2K = re.compile(r"ed2k://[^\s]+", re.IGNORECASE)
+# 电驴链接：精确匹配 ed2k://|file|名称|大小|hash|/ 结构。
+# 旧版 ed2k://[^\s]+ 会把相邻两条无分隔的 ed2k 粘成一条(如 ...|/ed2k://|file|...)，
+# 且页面作者重复粘贴同一 ed2k 时因整串含粘连内容无法被整串去重 → 数量虚增
+# (实测蜘蛛侠系列页 9 个真实资源被识别成 10 条)。
+RE_ED2K = re.compile(r"ed2k://\|file\|[^|]+\|\d+\|[0-9a-fA-F]+\|/", re.IGNORECASE)
 
 # Telegraph 等资源聚合页面链接
 RE_TELEGRAPH = re.compile(r"https?://telegra\.ph/[^\s<>'\"]+", re.IGNORECASE)
