@@ -1,5 +1,4 @@
 import pytest
-
 from telegram import InlineKeyboardMarkup
 
 from core.ui import (

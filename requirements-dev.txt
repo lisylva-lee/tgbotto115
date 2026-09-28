@@ -1,0 +1,8 @@
+# 开发/CI 依赖（含运行时依赖）
+-r requirements.txt
+
+pytest==9.1.1
+# 缺少这个插件时，tests/test_ratelimit.py 里的 @pytest.mark.asyncio 用例会被跳过式
+# 失败（"async def functions are not natively supported"），等于没测
+pytest-asyncio==1.4.0
+ruff==0.16.9

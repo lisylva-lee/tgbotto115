@@ -15,19 +15,20 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# 复制源码
+# 复制源码（tests/ 只服务于 CI，不进生产镜像）
 COPY bot.py config.py config.example.yaml README.md ./
 COPY core/ ./core/
-COPY tests/ ./tests/
 
-# 数据目录（运行时通过 volume 持久化）
-RUN mkdir -p /app/data /app/logs
+# 数据目录（运行时通过 volume 持久化）+ 非 root 运行
+RUN useradd --create-home --uid 10001 sharebot \
+    && mkdir -p /app/data /app/logs \
+    && chown -R sharebot:sharebot /app
+USER sharebot
 
 # 默认挂载点声明（用户需挂载 config.yaml 与数据卷）
 VOLUME ["/app/data", "/app/logs"]
 
-# 健康检查：简单探测进程存活（可选）
-HEALTHCHECK --interval=60s --timeout=5s --start-period=30s --retries=3 \
-  CMD python -c "import socket,sys; s=socket.socket(); s.bind(('127.0.0.1',0))" || exit 1
-
+# 注意：这里原先的 HEALTHCHECK 是假探测（bind 一个随机本地端口，恒成功，测不出 bot
+# 是否活着）。本项目没有 HTTP 端点，无法做有意义的健康检查，因此不再声明，靠
+# compose 的 restart: unless-stopped / 外部监控告警。
 CMD ["python", "bot.py"]

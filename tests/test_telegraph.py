@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 tests/test_telegraph.py - telegra.ph 页面链接解析测试
 
@@ -15,9 +14,9 @@ import pytest
 from core import (
     RE_TELEGRAPH,
     RE_TELEGRAPH_LOOSE,
+    extract_links_from_reply_markup,
     fetch_links_from_page,
     normalize_page_url,
-    extract_links_from_reply_markup,
 )
 
 # 构造一个 Telegraph 风格页面：ed2k 同时出现在 og:description 与 article 正文
@@ -83,7 +82,7 @@ def test_normalize_page_url_adds_protocol_and_cleans():
 # ================================
 
 def test_extract_links_from_reply_markup_extracts_button_links():
-    from telegram import InlineKeyboardMarkup, InlineKeyboardButton
+    from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 
     rm = InlineKeyboardMarkup([
         [InlineKeyboardButton(text="📄 详情", url="https://telegra.ph/蜘蛛侠系列-05-26")],

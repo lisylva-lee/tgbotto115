@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 config.py - 集中配置管理（config.yaml 驱动）
 
@@ -10,11 +9,9 @@ config.py - 集中配置管理（config.yaml 驱动）
 （share.db），不再使用散落的 txt/json 文件。
 """
 
+import os
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Optional
-import os
-import sys
 
 try:
     import yaml

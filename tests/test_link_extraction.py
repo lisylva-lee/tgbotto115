@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 tests/test_link_extraction.py - 消息链接提取 + 页面按钮优先规则测试
 
@@ -18,7 +17,6 @@ import logging
 from pathlib import Path
 from types import SimpleNamespace
 
-import pytest
 from telegram import (
     InlineKeyboardButton,
     InlineKeyboardMarkup,

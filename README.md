@@ -89,6 +89,30 @@ docker compose -f docker-compose.example.yaml up -d
 
 > ⚠️ **安全说明**：`config.yaml`（含 Telegram token + 115 cookie）已在 `.gitignore` 排除，不会进入仓库或镜像。部署时通过 volume 挂载到容器 `/app/config.yaml`。
 
+## 🧪 开发与测试
+
+```bash
+# 1. 装开发依赖（含运行时依赖 + pytest / pytest-asyncio / ruff）
+pip install -r requirements-dev.txt
+
+# 2. 跑测试（tests/conftest.py 会在缺少 config.yaml 时生成一份占位配置，不动你的真实配置）
+python -m pytest -q
+
+# 3. 静态检查（规则集见 ruff.toml）
+ruff check .
+```
+
+CI（.github/workflows/docker-build.yml）在构建镜像前会先跑 lint 与测试，测试不过不发布。
+
+> 排查提示：bot 的日志里**不会**再有完整请求 URL。PTB 走 httpx，而 httpx 在 INFO 级会打印
+> 形如 `https://api.telegram.org/bot<TOKEN>/getMe` 的地址，所以 `bot.py` 把
+> httpx/httpcore/telegram.ext 压到了 WARNING —— 请勿为了"看得更清楚"把它们调回 INFO，
+> 那会把 token 写进 `logs/bot_*.log`。
+
+## 📝 改动说明 / 修复记录
+
+见 [FIXES.md](FIXES.md)（一次代码审查后的修复清单与验证方法）。
+
 ## 📝 License
 
 MIT

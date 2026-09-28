@@ -1,10 +1,15 @@
-# 115 ShareBot 依赖
+# 115 ShareBot 运行时依赖
+#
+# 版本一律钉死（==）：下面这些库都发生过破坏性变更，用 >= 规格会让 Docker 构建和
+# 新机器部署每次都可能装到未验证的新版本 —— 之前的"镜像初始化失败"就是这个原因，
+# 修好后只要 rebuild 一次就会复发。升级请显式改这里的版本并跑一遍 pytest。
 
-# [job-queue] 提供 ConversationHandler 的 conversation_timeout（依赖 APScheduler），缺失会导致会话超时无效
-python-telegram-bot[job-queue]>=20.0
-requests>=2.28.0
-# p115client：>=0.0.5。注意不要传 check_for_relogin（PyPI 0.0.9.x 已移除该参数，
-# 传了会 TypeError 导致初始化失败；且该参数会触发自动 relogin 可能作废 cookie）。
-p115client>=0.0.5
-cachetools>=5.0.0
-PyYAML>=6.0
+# [job-queue] 提供 ConversationHandler 的 conversation_timeout（依赖 APScheduler），
+# 缺失会导致会话超时静默失效
+python-telegram-bot[job-queue]==22.8
+requests==2.34.2
+# p115client：不要传 check_for_relogin（0.0.9.x 已移除该参数，传了会 TypeError；
+# 且该参数会触发自动 relogin，可能作废 config.yaml 里的 cookie）
+p115client==0.0.9.6.5.1
+cachetools==7.2.0
+PyYAML==6.0.3
