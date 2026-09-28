@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 bot.py (重构版：config.yaml + SQLite share.db + 目录 UI 交互)
 
@@ -15,30 +14,21 @@ bot.py (重构版：config.yaml + SQLite share.db + 目录 UI 交互)
 - /del_cid : 按钮选择删除目录
 """
 
+import asyncio
+import logging
 import os
 import sys
-import logging
-import asyncio
-from datetime import datetime
+import uuid
 
-# Telegram 代理支持（读取环境变量 HTTP_PROXY/HTTPS_PROXY，仅用于 Telegram Bot API）
-try:
-    import httpx
-    _TELEGRAM_PROXY = os.environ.get("HTTP_PROXY") or os.environ.get("HTTPS_PROXY") or ""
-    if _TELEGRAM_PROXY:
-        _TELEGRAM_PROXY = _TELEGRAM_PROXY.strip()
-except ImportError:
-    _TELEGRAM_PROXY = ""
-
-from telegram import Update, MessageEntity, BotCommand
+from telegram import BotCommand, MessageEntity, Update
 from telegram.ext import (
     Application,
-    CommandHandler,
-    MessageHandler,
     CallbackQueryHandler,
-    filters,
+    CommandHandler,
     ContextTypes,
     ConversationHandler,
+    MessageHandler,
+    filters,
 )
 
 # TTL 缓存用于 session 管理
@@ -52,26 +42,25 @@ from config import (
     BOT_TOKEN,
     COOKIE,
     config,
-    get_default_share_cid,
     get_default_offline_cid,
+    get_default_share_cid,
 )
 from core import (
     RE_115_URL,
-    RE_MAGNET,
     RE_ED2K,
+    RE_MAGNET,
     RE_TELEGRAPH,
     RE_TELEGRAPH_LOOSE,
-    run_blocking_io,
-    get_p115_client,
-    get_dir_name_by_cid,
-    resolve_cid_by_path,
-    ensure_dir_by_path,
-    process_share_content,
-    add_offline_tasks,
-    fetch_links_from_page,
-    normalize_page_url,
-    extract_links_from_reply_markup,
     ShareDB,
+    add_offline_tasks,
+    ensure_dir_by_path,
+    extract_links_from_reply_markup,
+    fetch_links_from_page,
+    get_dir_name_by_cid,
+    get_p115_client,
+    normalize_page_url,
+    process_share_content,
+    resolve_cid_by_path,
 )
 from core.ui import (
     build_cid_keyboard,
@@ -91,12 +80,33 @@ from core.ui import (
 )
 
 # ================================
+# Telegram 代理支持
+# ================================
+# 读取 HTTP_PROXY/HTTPS_PROXY，仅用于 Telegram Bot API。
+# 这里不需要 import httpx 来判断可用性：httpx 是 python-telegram-bot 的依赖，
+# 原来的 try/except ImportError 只是把 import 当探测用，反而掩盖了真实的缺失。
+_TELEGRAM_PROXY = (os.environ.get("HTTP_PROXY") or os.environ.get("HTTPS_PROXY") or "").strip()
+
+
+# ================================
 # 日志配置
 # ================================
-logging.basicConfig(
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    level=logging.INFO,
-)
+LOG_FORMAT = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+
+# 这些库在 INFO 级会记录完整请求 URL：PTB 走 httpx，而 Telegram Bot API 的 URL 形如
+# https://api.telegram.org/bot<TOKEN>/getMe —— 根日志一旦设为 INFO，bot token 就会
+# 明文写进日志文件（run_bot.sh 会把 stdout/stderr 落盘）。统一压到 WARNING。
+NOISY_LOGGERS = ("httpx", "httpcore", "telegram.ext", "telegram.request", "urllib3")
+
+
+def configure_logging() -> None:
+    """配置根日志，并把会泄露凭据的第三方 INFO 日志压到 WARNING。"""
+    logging.basicConfig(format=LOG_FORMAT, level=logging.INFO)
+    for name in NOISY_LOGGERS:
+        logging.getLogger(name).setLevel(logging.WARNING)
+
+
+configure_logging()
 logger = logging.getLogger(__name__)
 
 
@@ -361,7 +371,7 @@ async def expand_page_links(parsed: dict) -> dict:
         for page_url in pages:
             try:
                 page_links = await asyncio.to_thread(fetch_links_from_page, page_url)
-            except Exception as e:
+            except Exception:
                 logger.exception(f"解析页面失败 {page_url}:")
                 continue
             parsed["share"].extend(page_links.get("share", []))
@@ -502,7 +512,7 @@ async def handle_dir_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE)
         return
 
     pending = context.user_data.pop('pending_dir', None)
-    flow = context.user_data.pop('dir_flow', None)
+    context.user_data.pop('dir_flow', None)
 
     if action == 'cancel' or not pending:
         await query.edit_message_text("❌ 已取消。")
@@ -676,7 +686,6 @@ async def reset_cid(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 async def add_link(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """处理用户发送的链接消息（支持转发消息）- 使用缓冲机制"""
     message = update.effective_message
-    user_id = update.effective_user.id
     text = (message.text or message.caption or "").strip()
 
     if not text:
@@ -1092,9 +1101,17 @@ async def process_offline_only(update: Update, context: ContextTypes.DEFAULT_TYP
 # ================================
 
 async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
-    logger.exception(f"错误: {context.error}")
+    """把完整异常写进日志，只向用户回一条不含内部细节的提示。
+
+    原始异常常带文件路径、内网地址或 115 接口返回体，直接回给用户属于信息泄露；
+    给一个短编号，出问题时凭编号去日志里定位。
+    """
+    error_id = uuid.uuid4().hex[:8]
+    logger.exception(f"错误[{error_id}]: {context.error}")
     if update and hasattr(update, 'effective_message') and update.effective_message:
-        await update.effective_message.reply_text(f"❌ 发生错误: {context.error}")
+        await update.effective_message.reply_text(
+            f"❌ 处理失败，已记录（编号 {error_id}）。若反复出现，请把编号发给管理员。"
+        )
 
 
 # ================================
