@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 core/ui.py - Telegram 交互 UI 辅助函数
 
@@ -200,7 +199,7 @@ def build_share_progress_message(processed: int, total: int, cid_name: str) -> s
         percent = 100
     else:
         percent = round(processed / total * 100)
-    done = processed >= total and total > 0
+    done = processed >= total > 0
     status = "✅ 已完成" if done else "📦 分享转存中"
     return (
         f"{status}\n\n"

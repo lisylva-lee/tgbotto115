@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 core/db.py - 本地 SQLite 持久化层（share.db）
 
@@ -16,11 +15,11 @@ core/db.py - 本地 SQLite 持久化层（share.db）
 
 from __future__ import annotations
 
-import json
 import sqlite3
 import threading
+from collections.abc import Iterator
+from contextlib import contextmanager
 from pathlib import Path
-from typing import Any, Optional
 
 
 class ShareDB:
@@ -30,20 +29,41 @@ class ShareDB:
         self.db_path = str(db_path)
         Path(self.db_path).parent.mkdir(parents=True, exist_ok=True)
         self._init_lock = threading.Lock()
+        self._enable_wal()
         self._init_schema()
 
-    def _connect(self) -> sqlite3.Connection:
-        conn = sqlite3.connect(self.db_path, check_same_thread=False)
+    def _enable_wal(self) -> None:
+        """开启 WAL（数据库级属性，只需设置一次，不必每个连接都设）。"""
+        with self._connect() as conn:
+            conn.execute("PRAGMA journal_mode=WAL")
+
+    @contextmanager
+    def _connect(self) -> Iterator[sqlite3.Connection]:
+        """打开一个连接，退出时**保证关闭**。
+
+        注意：sqlite3.Connection 的 with 语句只是事务上下文（退出时 commit/rollback），
+        并不会关闭连接。此前每个方法都写成 with self._connect() as conn，看起来像是
+        关掉了，实际上每次调用都会泄漏一个连接，长时间运行会累积文件描述符与内存。
+        改为：yield 连接 -> 成功 commit / 异常 rollback -> finally close。
+        """
+        conn = sqlite3.connect(self.db_path, check_same_thread=False, timeout=5.0)
         conn.row_factory = sqlite3.Row
-        conn.execute("PRAGMA journal_mode=WAL")
-        conn.execute("PRAGMA foreign_keys=ON")
-        return conn
+        try:
+            conn.execute("PRAGMA foreign_keys=ON")
+            # 多线程写冲突时先等待，而不是立刻抛 database is locked
+            conn.execute("PRAGMA busy_timeout=5000")
+            yield conn
+            conn.commit()
+        except Exception:
+            conn.rollback()
+            raise
+        finally:
+            conn.close()
 
     def _init_schema(self) -> None:
-        with self._init_lock:
-            with self._connect() as conn:
-                conn.executescript(
-                    """
+        with self._init_lock, self._connect() as conn:
+            conn.executescript(
+                """
                     CREATE TABLE IF NOT EXISTS dirs (
                         name TEXT PRIMARY KEY,
                         cid TEXT NOT NULL,
@@ -83,7 +103,7 @@ class ShareDB:
                         created_at TEXT DEFAULT (datetime('now','localtime'))
                     );
                     """
-                )
+            )
 
     # ---------------- dirs（目录映射） ----------------
 
@@ -124,7 +144,7 @@ class ShareDB:
 
     # ---------------- user_cid（用户自定义目录） ----------------
 
-    def get_user_cid(self, user_id: int, kind: str) -> Optional[dict]:
+    def get_user_cid(self, user_id: int, kind: str) -> dict | None:
         with self._connect() as conn:
             row = conn.execute(
                 "SELECT cid, name FROM user_cid WHERE user_id = ? AND kind = ?",

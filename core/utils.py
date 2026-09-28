@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 core/utils.py - 共享工具函数
 
@@ -7,11 +6,10 @@ core/utils.py - 共享工具函数
 """
 
 import json
-import re
 import logging
+import re
 from html import unescape as html_unescape
 from pathlib import Path
-from typing import Optional, Any
 
 import requests
 
@@ -56,7 +54,7 @@ RE_CID = re.compile(r'(\d{15,25})')
 # 文件大小格式化
 # ================================
 
-def format_file_size(size_bytes: int | float | None) -> str:
+def format_file_size(size_bytes: float | None) -> str:
     """
     将字节数格式化为人类可读的文件大小。
     
@@ -68,15 +66,15 @@ def format_file_size(size_bytes: int | float | None) -> str:
     """
     if not size_bytes:
         return "0B"
-    
+
     size_names = ["B", "KB", "MB", "GB", "TB"]
     i = 0
     size = float(size_bytes)
-    
+
     while size >= 1024 and i < len(size_names) - 1:
         size /= 1024.0
         i += 1
-    
+
     return f"{size:.1f}{size_names[i]}"
 
 
@@ -183,7 +181,7 @@ def parse_115_links_from_text(content: str) -> list[dict]:
     """
     links = []
     seen = set()
-    
+
     def add_link(share_code: str, receive_code: str, original_text: str):
         key = (share_code, receive_code)
         if key not in seen and share_code:
@@ -193,15 +191,15 @@ def parse_115_links_from_text(content: str) -> list[dict]:
                 'receive_code': receive_code or '',
                 'original_text': original_text
             })
-    
+
     # 方法1：匹配完整 URL 格式
     for match in RE_115_URL.finditer(content):
         add_link(match.group(1), match.group(2), match.group(0))
-    
+
     # 方法2：匹配简化格式 (code password)
     for match in RE_SIMPLE_LINK.finditer(content):
         add_link(match.group(1), match.group(2), f'{match.group(1)} {match.group(2)}')
-    
+
     logger.debug(f"从文本中解析到 {len(links)} 个链接")
     return links
 
@@ -218,12 +216,12 @@ def extract_offline_links(content: str) -> list[str]:
     """
     links = []
     seen = set()
-    
+
     for link in RE_MAGNET.findall(content):
         if link not in seen:
             seen.add(link)
             links.append(link)
-    
+
     for link in RE_ED2K.findall(content):
         if link not in seen:
             seen.add(link)
@@ -381,7 +379,7 @@ def extract_links_from_reply_markup(reply_markup) -> dict:
     return result
 
 
-def extract_cid_from_text(content: str) -> Optional[str]:
+def extract_cid_from_text(content: str) -> str | None:
     """
     从文本提取 CID。
     
@@ -412,6 +410,6 @@ def is_directory_item(item: dict) -> bool:
     ico = item.get('ico', '')
     fid = item.get('fid')
     cid = item.get('cid')
-    
+
     # ico 为 folder，或者没有 fid 但有 cid
     return ico == 'folder' or (not bool(fid) and bool(cid))

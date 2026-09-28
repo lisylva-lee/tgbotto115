@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 core/ratelimit.py - 全局限速器（RateLimiter）
 
@@ -12,7 +11,6 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
-from typing import Optional
 
 logger = logging.getLogger(__name__)
 
@@ -40,7 +38,7 @@ class RateLimiter:
                 await asyncio.sleep(wait)
             self._last_ts = time.monotonic()
 
-    async def __aenter__(self) -> "RateLimiter":
+    async def __aenter__(self) -> RateLimiter:
         await self.acquire()
         return self
 
@@ -49,7 +47,7 @@ class RateLimiter:
 
 
 # 全局单例（应用级 QPS=1），由 client 层注入实际 qps
-_instance: Optional[RateLimiter] = None
+_instance: RateLimiter | None = None
 
 
 def get_rate_limiter(qps: float = 1.0) -> RateLimiter:

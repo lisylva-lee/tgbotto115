@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 core/models.py - 数据模型定义
 
@@ -8,7 +7,7 @@ core/models.py - 数据模型定义
 
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Optional, Any
+from typing import Any
 
 
 @dataclass
@@ -17,15 +16,15 @@ class ShareLink:
     share_code: str
     receive_code: str
     original_text: str = ""
-    
+
     def __hash__(self) -> int:
         return hash((self.share_code, self.receive_code))
-    
+
     def __eq__(self, other: object) -> bool:
         if not isinstance(other, ShareLink):
             return False
         return self.share_code == other.share_code and self.receive_code == other.receive_code
-    
+
     @property
     def key(self) -> str:
         """返回唯一键用于日志记录"""
@@ -37,13 +36,13 @@ class FileInfo:
     """文件信息"""
     name: str
     fid: str
-    cid: Optional[str] = None
+    cid: str | None = None
     size: int = 0
     parent_cid: str = ""
     depth: int = 0
     extension: str = ""
     original_item: dict = field(default_factory=dict)
-    
+
     @classmethod
     def from_api_item(cls, item: dict, parent_cid: str, depth: int) -> "FileInfo":
         """从 API 响应项创建 FileInfo"""
@@ -69,7 +68,7 @@ class DirInfo:
     parent_cid: str = ""
     depth: int = 0
     original_item: dict = field(default_factory=dict)
-    
+
     @classmethod
     def from_api_item(cls, item: dict, parent_cid: str, depth: int) -> "DirInfo":
         """从 API 响应项创建 DirInfo"""
@@ -90,12 +89,12 @@ class TransferResult:
     success: bool
     timestamp: str = field(default_factory=lambda: datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
     details: dict = field(default_factory=dict)
-    error: Optional[str] = None
-    
+    error: str | None = None
+
     @property
     def status(self) -> str:
         return 'success' if self.success else 'failed'
-    
+
     def to_dict(self) -> dict:
         """转换为字典用于 JSON 序列化"""
         return {
@@ -114,7 +113,7 @@ class OfflineTaskResult:
     url: str
     success: bool
     response: Any = None
-    error: Optional[str] = None
+    error: str | None = None
 
 
 @dataclass
@@ -123,7 +122,7 @@ class UserSession:
     user_id: int
     share_links: list = field(default_factory=list)
     offline_links: list = field(default_factory=list)
-    target_cid: Optional[str] = None
-    cid_name: Optional[str] = None
-    action_choice: Optional[str] = None
+    target_cid: str | None = None
+    cid_name: str | None = None
+    action_choice: str | None = None
     created_at: datetime = field(default_factory=datetime.now)
