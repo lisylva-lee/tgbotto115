@@ -6,7 +6,7 @@
 
 | 指标 | 修复前 | 修复后 |
 |------|--------|--------|
-| `pytest` | 42 passed / **3 failed** | **53 passed** / 0 failed |
+| `pytest` | 42 passed / **3 failed** | **55 passed** / 0 failed |
 | `ruff check`（原默认规则集 E4,E7,E9,F） | 100 项 | **0 项** |
 | CI | 只构建 Docker，不跑测试 | 构建前先 lint + 测试，不过不发布 |
 | 依赖版本 | `>=` 浮动 | 全部 `==` 钉死 |
@@ -32,6 +32,30 @@
 **修法**：`bot.py` 新增 `configure_logging()`，把 `httpx / httpcore / telegram.ext /
 telegram.request / urllib3` 压到 WARNING。
 **验证**：`python -m pytest tests/test_logging.py -q`
+
+### P0-1 补充（容器冒烟时发现的第二条泄露路径）
+
+压级别**挡不住"异常信息自带 token"**：PTB 在 token 无效时抛
+
+    telegram.error.InvalidToken: The token `123456:AAH...` was rejected by the server.
+
+这条异常经 `telegram.ext` 记录、并且作为未处理异常打印，都会落进日志文件 —— 而"token 配错"
+恰恰是最常见的场景。容器冒烟实测：修复 httpx 之后，日志里仍然出现 2 次 token。
+
+**修法**（两层）：
+
+1. `RedactSecretsFilter`：挂在**所有 handler**（不是 logger，因为其他 logger 的记录是直接冒泡到
+   handler 的）上，脱敏对象包括 `record.msg`、`record.args` 与**异常堆栈文本**；脱敏模式为
+   `<bot_id>:<token>` 与 115 cookie 的 `UID=/CID=/SEID=/KID=` 键值。
+2. `main()` 里捕获 `telegram.error.InvalidToken`，只提示"Telegram 拒绝了这个 bot token，
+   请检查 config.yaml"，不再把 PTB 的原始异常文本甩给用户；其它异常走 `logger.exception`（同样被脱敏）。
+
+**验证**：容器内挂假配置启动 —— 日志含 token 行数 `0`、含 `<REDACTED>` 行数 `1`：
+
+    telegram.error.InvalidToken: The token `<REDACTED>` was rejected by the server.
+    __main__ - ERROR - Telegram 拒绝了这个 bot token，请检查 config.yaml 的 telegram.bot_token
+
+单测：`tests/test_logging.py` 覆盖 `redact()` 与异常堆栈脱敏。
 
 ## P0-2 修复：异常不再原样回吐给用户
 
@@ -124,7 +148,7 @@ CI 增加 `test` job（lint + pytest），`build` job `needs: test`。
 
 ```bash
 pip install -r requirements-dev.txt
-python -m pytest -q          # 期望 53 passed
+python -m pytest -q          # 期望 55 passed
 ruff check .                 # 期望 All checks passed
 python -m compileall -q bot.py config.py migrate_legacy.py core tests
 python migrate_legacy.py --dry-run

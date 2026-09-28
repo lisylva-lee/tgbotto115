@@ -17,10 +17,13 @@ bot.py (重构版：config.yaml + SQLite share.db + 目录 UI 交互)
 import asyncio
 import logging
 import os
+import re
 import sys
+import traceback
 import uuid
 
 from telegram import BotCommand, MessageEntity, Update
+from telegram.error import InvalidToken
 from telegram.ext import (
     Application,
     CallbackQueryHandler,
@@ -98,12 +101,57 @@ LOG_FORMAT = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 # 明文写进日志文件（run_bot.sh 会把 stdout/stderr 落盘）。统一压到 WARNING。
 NOISY_LOGGERS = ("httpx", "httpcore", "telegram.ext", "telegram.request", "urllib3")
 
+# 但压级别挡不住"异常信息本身带 token"：PTB 在 token 无效时会抛
+#   InvalidToken: The token `123456:AAH...` was rejected by the server.
+# 这条异常经 telegram.ext 记录（并作为未处理异常打印）后会进日志文件。
+# 因此再加一层兜底：日志文本里凡是形如 <bot_id>:<token> 或 115 cookie 键值的一律抹掉。
+TOKEN_PATTERN = re.compile(r"\d{6,12}:[A-Za-z0-9_-]{15,}")
+COOKIE_PATTERN = re.compile(r"\b(UID|CID|SEID|KID)=\S+")
+
+REDACTED = "<REDACTED>"
+
+
+def redact(text: str) -> str:
+    """把日志文本里的 bot token / 115 cookie 抹掉。"""
+    if not text:
+        return text
+    text = TOKEN_PATTERN.sub(REDACTED, text)
+    return COOKIE_PATTERN.sub(lambda m: m.group(1) + "=" + REDACTED, text)
+
+
+class RedactSecretsFilter(logging.Filter):
+    """在日志落地前抹掉凭据（消息、参数与异常堆栈都覆盖）。
+
+    挂在 handler 上而不是 logger 上：其他 logger 产生的记录是直接冒泡到 handler 的，
+    logger 级 filter 管不到它们。
+    """
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        try:
+            if isinstance(record.msg, str):
+                record.msg = redact(record.msg)
+            if record.args:
+                if isinstance(record.args, dict):
+                    record.args = {k: redact(v) if isinstance(v, str) else v for k, v in record.args.items()}
+                else:
+                    record.args = tuple(redact(a) if isinstance(a, str) else a for a in record.args)
+            if record.exc_info and not record.exc_text:
+                record.exc_text = redact("".join(traceback.format_exception(*record.exc_info)))
+        except Exception:
+            # 兜底逻辑本身不能影响正常日志
+            pass
+        return True
+
 
 def configure_logging() -> None:
-    """配置根日志，并把会泄露凭据的第三方 INFO 日志压到 WARNING。"""
+    """配置根日志：压掉会泄露凭据的第三方 INFO 日志，并给所有 handler 加上脱敏过滤。"""
     logging.basicConfig(format=LOG_FORMAT, level=logging.INFO)
     for name in NOISY_LOGGERS:
         logging.getLogger(name).setLevel(logging.WARNING)
+    root = logging.getLogger()
+    root.addFilter(RedactSecretsFilter())
+    for handler in root.handlers:
+        handler.addFilter(RedactSecretsFilter())
 
 
 configure_logging()
@@ -1216,7 +1264,16 @@ def main() -> None:
     application.add_error_handler(error_handler)
 
     logger.info("机器人启动...")
-    application.run_polling()
+    try:
+        application.run_polling()
+    except InvalidToken:
+        # PTB 的 InvalidToken 消息里带着 token 明文，这里只给可操作提示；
+        # 即使有堆栈输出，RedactSecretsFilter 也会把 token 抹掉。
+        logger.error("Telegram 拒绝了这个 bot token，请检查 config.yaml 的 telegram.bot_token")
+        sys.exit(1)
+    except Exception:
+        logger.exception("机器人异常退出")
+        sys.exit(1)
 
 
 if __name__ == "__main__":

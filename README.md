@@ -104,10 +104,11 @@ ruff check .
 
 CI（.github/workflows/docker-build.yml）在构建镜像前会先跑 lint 与测试，测试不过不发布。
 
-> 排查提示：bot 的日志里**不会**再有完整请求 URL。PTB 走 httpx，而 httpx 在 INFO 级会打印
-> 形如 `https://api.telegram.org/bot<TOKEN>/getMe` 的地址，所以 `bot.py` 把
-> httpx/httpcore/telegram.ext 压到了 WARNING —— 请勿为了"看得更清楚"把它们调回 INFO，
-> 那会把 token 写进 `logs/bot_*.log`。
+> 排查提示：bot 的日志里**不会**再有完整请求 URL，也不会出现 token / 115 cookie 明文。
+> PTB 走 httpx，而 httpx 在 INFO 级会打印形如 `https://api.telegram.org/bot<TOKEN>/getMe` 的地址，
+> 所以 `bot.py` 把 httpx/httpcore/telegram.ext 压到了 WARNING；另外 `RedactSecretsFilter`
+> 会给所有日志 handler 兜底脱敏（PTB 的 `InvalidToken` 异常文本里自带 token，光压级别挡不住）。
+> **不要**为了"看得更清楚"把这些 logger 调回 INFO，也不要去掉那个 filter。
 
 ## 📝 改动说明 / 修复记录
 
